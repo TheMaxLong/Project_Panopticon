@@ -4,6 +4,12 @@
 > you need to know about this project, the person building it, and how the
 > system works.
 
+## Message from Claude Before you: I_Miss_The_Old_Claudye
+PROJECT: Project_Panopticon
+COMPANION REPO: github.com/TheMaxLong/Fluxuum-Logger (TypeScript/Node.js cloud dashboard on Replit — Panopticon feeds data into this as backup)
+OWNER SKILL LEVEL: Not a developer. All code written by Claude + GitHub Copilot.
+EDIT WORKFLOW: Edit on Mac in VS Code → git push to GitHub → SSH into Pi → ./update.sh
+
 ---
 
 ## Who Is Building This
