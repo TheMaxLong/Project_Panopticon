@@ -1,0 +1,39 @@
+# ==========================================================================
+# dashboard.service — systemd service file for the Anderson dashboard
+#
+# What this does:
+# Makes the dashboard web server start automatically whenever the Pi
+# boots up, and restart automatically if it ever crashes.
+# The dashboard will be available at http://anderson-hub:5000
+#
+# How to install (one time only):
+#   sudo cp dashboard.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable dashboard
+#   sudo systemctl start dashboard
+#
+# How to check if it's running:
+#   sudo systemctl status dashboard
+#
+# How to see live logs:
+#   sudo journalctl -u dashboard -f
+# ==========================================================================
+
+[Unit]
+Description=Anderson Facility Dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/anderson-monitor
+ExecStart=/usr/bin/python3 /home/pi/anderson-monitor/dashboard.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+EnvironmentFile=-/home/pi/anderson-monitor/.env
+
+[Install]
+WantedBy=multi-user.target

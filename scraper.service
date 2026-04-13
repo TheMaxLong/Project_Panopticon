@@ -1,0 +1,55 @@
+# ==========================================================================
+# scraper.service — systemd service file for the Anderson scraper
+#
+# What this does:
+# Makes the scraper start automatically whenever the Pi boots up,
+# and restart automatically if it ever crashes.
+#
+# How to install (one time only):
+#   sudo cp scraper.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable scraper
+#   sudo systemctl start scraper
+#
+# How to check if it's running:
+#   sudo systemctl status scraper
+#
+# How to see live logs:
+#   sudo journalctl -u scraper -f
+# ==========================================================================
+
+[Unit]
+# Human-readable description shown in "systemctl status"
+Description=Anderson Facility Scraper
+# Wait for the network to be ready before starting
+# (the scraper needs to reach the building controllers)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# Type=simple means: just run the command and keep it running
+Type=simple
+
+# Which user to run as (pi is the default Raspberry Pi user)
+User=pi
+
+# The folder to run from — the scraper expects anderson.db and .env here
+WorkingDirectory=/home/pi/anderson-monitor
+
+# The actual command to start the scraper
+ExecStart=/usr/bin/python3 /home/pi/anderson-monitor/scraper.py
+
+# If it crashes, wait 5 seconds and try again automatically
+Restart=always
+RestartSec=5
+
+# Send all print output to the system journal (viewable with journalctl)
+StandardOutput=journal
+StandardError=journal
+
+# Load environment variables from .env file
+EnvironmentFile=-/home/pi/anderson-monitor/.env
+
+[Install]
+# Start this service when the Pi boots into normal multi-user mode
+WantedBy=multi-user.target

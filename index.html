@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anderson Facility Monitor</title>
+
+    <!-- Chart.js from CDN — no npm or node required -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+
+    <style>
+        /* ===================================================================
+           DARK THEME — green-on-dark to match the Fluxuum aesthetic.
+           All colors are defined here as CSS variables so the whole theme
+           can be tweaked from one place.
+           =================================================================== */
+        :root {
+            --bg-main:      #0a0a0a;       /* page background */
+            --bg-card:      #141414;       /* card/panel background */
+            --bg-card-alt:  #1a1a1a;       /* slightly lighter card */
+            --border:       #2a2a2a;       /* subtle borders */
+            --text-primary: #e0e0e0;       /* main text */
+            --text-dim:     #777777;       /* secondary text */
+            --green:        #4ade80;       /* healthy / online */
+            --green-dim:    #166534;       /* green background tint */
+            --yellow:       #facc15;       /* warning */
+            --yellow-dim:   #854d0e;       /* warning background tint */
+            --red:          #f87171;       /* critical alert */
+            --red-dim:      #991b1b;       /* critical background tint */
+            --cyan:         #7dd3fc;       /* accent / highlight */
+            --font-mono:    'JetBrains Mono', 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: var(--bg-main);
+            color: var(--text-primary);
+            font-family: var(--font-mono);
+            font-size: 14px;
+            line-height: 1.5;
+            padding: 16px;
+            min-height: 100vh;
+        }
+
+        /* --- HEADER --- */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .header h1 {
+            font-size: 18px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            color: var(--cyan);
+        }
+        .header .updated {
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+
+        /* --- ALERTS BANNER --- */
+        .alerts-banner {
+            margin-bottom: 16px;
+        }
+        .alert-item {
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin-bottom: 6px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .alert-warning {
+            background: var(--yellow-dim);
+            color: var(--yellow);
+            border-left: 3px solid var(--yellow);
+        }
+        .alert-critical {
+            background: var(--red-dim);
+            color: var(--red);
+            border-left: 3px solid var(--red);
+            animation: pulse-critical 2s ease-in-out infinite;
+        }
+        @keyframes pulse-critical {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        /* --- BUILDING CARDS GRID --- */
+        .buildings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .building-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+        }
+        /* AB (primary) gets a special highlight border */
+        .building-card.primary {
+            border-color: var(--cyan);
+            box-shadow: 0 0 12px rgba(125, 211, 252, 0.08);
+        }
+
+        .building-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .building-name {
+            font-size: 15px;
+            font-weight: 600;
+        }
+        .building-name .primary-tag {
+            font-size: 10px;
+            color: var(--cyan);
+            margin-left: 6px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Online / Offline badge */
+        .status-badge {
+            font-size: 11px;
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .status-online {
+            background: var(--green-dim);
+            color: var(--green);
+        }
+        .status-offline {
+            background: var(--red-dim);
+            color: var(--red);
+        }
+
+        /* Sensor readings grid inside each card */
+        .readings-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .reading-box {
+            background: var(--bg-card-alt);
+            border-radius: 6px;
+            padding: 10px;
+            text-align: center;
+        }
+        .reading-label {
+            font-size: 10px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 4px;
+        }
+        .reading-value {
+            font-size: 22px;
+            font-weight: 700;
+        }
+        .reading-value.normal    { color: var(--green); }
+        .reading-value.warning   { color: var(--yellow); }
+        .reading-value.critical  { color: var(--red); }
+        .reading-value.offline   { color: var(--text-dim); }
+
+        /* --- CHARTS SECTION --- */
+        .charts-section {
+            margin-top: 8px;
+        }
+        .charts-section h2 {
+            font-size: 14px;
+            color: var(--text-dim);
+            margin-bottom: 12px;
+            font-weight: 400;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 16px;
+        }
+        .chart-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+        }
+        .chart-card h3 {
+            font-size: 12px;
+            color: var(--text-dim);
+            margin-bottom: 10px;
+            font-weight: 400;
+        }
+        .chart-container {
+            position: relative;
+            height: 200px;
+        }
+
+        /* --- MOBILE TWEAKS --- */
+        @media (max-width: 500px) {
+            body { padding: 10px; font-size: 13px; }
+            .header h1 { font-size: 15px; }
+            .buildings-grid { grid-template-columns: 1fr; }
+            .charts-grid { grid-template-columns: 1fr; }
+            .chart-container { height: 160px; }
+            .reading-value { font-size: 18px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ============================================================
+         HEADER — title and last-updated timestamp
+         ============================================================ -->
+    <div class="header">
+        <h1>ANDERSON FACILITY</h1>
+        <span class="updated" id="last-updated">Loading...</span>
+    </div>
+
+    <!-- ============================================================
+         ALERTS — warnings and critical alerts appear here
+         ============================================================ -->
+    <div class="alerts-banner" id="alerts-container"></div>
+
+    <!-- ============================================================
+         BUILDING CARDS — one card per building with live readings
+         ============================================================ -->
+    <div class="buildings-grid" id="buildings-container">
+        <!-- Cards are generated by JavaScript below -->
+    </div>
+
+    <!-- ============================================================
+         CHARTS — pH and EC trends for each building (last 2 hours)
+         ============================================================ -->
+    <div class="charts-section">
+        <h2>2-Hour Trends</h2>
+        <div class="charts-grid">
+            <div class="chart-card">
+                <h3>pH — All Buildings</h3>
+                <div class="chart-container">
+                    <canvas id="chart-ph"></canvas>
+                </div>
+            </div>
+            <div class="chart-card">
+                <h3>EC (mS/cm) — All Buildings</h3>
+                <div class="chart-container">
+                    <canvas id="chart-ec"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // ==================================================================
+    // DASHBOARD JAVASCRIPT
+    // This code runs in the browser. It fetches live data from the Flask
+    // server every 5 seconds and updates the page.
+    // ==================================================================
+
+    // --- CONFIGURATION ---
+    // How often to refresh data (milliseconds). 5000 = 5 seconds.
+    const REFRESH_INTERVAL = 5000;
+
+    // Anomaly thresholds — same values the spec calls for
+    const PH_LOW  = 5.6;   // pH below this → yellow warning
+    const PH_HIGH = 6.3;   // pH above this → yellow warning
+    const EC_LOW  = 2.5;   // EC below this → yellow warning
+    const EC_HIGH = 3.5;   // EC above this → yellow warning
+
+    // Chart colors — one per building
+    const CHART_COLORS = {
+        AB: { line: "#7dd3fc", fill: "rgba(125,211,252,0.08)" },  // cyan
+        EF: { line: "#4ade80", fill: "rgba(74,222,128,0.08)"  },  // green
+        GH: { line: "#c084fc", fill: "rgba(192,132,252,0.08)" },  // purple
+    };
+
+    // Building definitions for card rendering
+    const BUILDING_DEFS = [
+        { name: "AB", label: "Building AB", primary: true },
+        { name: "EF", label: "Building EF", primary: false },
+        { name: "GH", label: "Building GH", primary: false },
+    ];
+
+    // --- CHART INSTANCES ---
+    // We create these once and update their data on each refresh.
+    let phChart = null;
+    let ecChart = null;
+
+    // ==================================================================
+    // DETERMINE STATUS CLASS FOR A READING VALUE
+    // Returns "normal", "warning", "critical", or "offline"
+    // ==================================================================
+    function phStatus(value) {
+        if (value === null || value === undefined) return "offline";
+        if (value < PH_LOW || value > PH_HIGH) return "warning";
+        return "normal";
+    }
+
+    function ecStatus(value) {
+        if (value === null || value === undefined) return "offline";
+        if (value < EC_LOW || value > EC_HIGH) return "warning";
+        return "normal";
+    }
+
+    function flowStatus(value) {
+        if (value === null || value === undefined) return "offline";
+        if (value === 0) return "critical";
+        return "normal";
+    }
+
+    // Format a number for display — show "—" if null
+    function fmt(value, decimals) {
+        if (value === null || value === undefined) return "—";
+        return Number(value).toFixed(decimals || 1);
+    }
+
+    // ==================================================================
+    // RENDER BUILDING CARDS
+    // Called every refresh with the latest data from /api/latest
+    // ==================================================================
+    function renderBuildings(data) {
+        const container = document.getElementById("buildings-container");
+        const alertsContainer = document.getElementById("alerts-container");
+        let cardsHTML = "";
+        let alertsHTML = "";
+
+        for (const def of BUILDING_DEFS) {
+            const reading = data[def.name];
+            const online = !!reading;
+
+            // Values (or null if offline)
+            const ph1  = online ? reading.ph1 : null;
+            const ph2  = online ? reading.ph2 : null;
+            const ec   = online ? reading.ec  : null;
+            const flow = online ? reading.flow : null;
+
+            // Build alerts for this building
+            if (online) {
+                if (ph1 !== null && (ph1 < PH_LOW || ph1 > PH_HIGH)) {
+                    alertsHTML += `<div class="alert-item alert-warning">⚠ ${def.name} pH1 = ${fmt(ph1)} (target ${PH_LOW}–${PH_HIGH})</div>`;
+                }
+                if (ph2 !== null && (ph2 < PH_LOW || ph2 > PH_HIGH)) {
+                    alertsHTML += `<div class="alert-item alert-warning">⚠ ${def.name} pH2 = ${fmt(ph2)} (target ${PH_LOW}–${PH_HIGH})</div>`;
+                }
+                if (ec !== null && (ec < EC_LOW || ec > EC_HIGH)) {
+                    alertsHTML += `<div class="alert-item alert-warning">⚠ ${def.name} EC = ${fmt(ec)} mS/cm (target ${EC_LOW}–${EC_HIGH})</div>`;
+                }
+                if (flow !== null && flow === 0) {
+                    alertsHTML += `<div class="alert-item alert-critical">🚨 ${def.name} FLOW = 0 GPM — CHECK IMMEDIATELY</div>`;
+                }
+            } else {
+                alertsHTML += `<div class="alert-item alert-critical">🚨 ${def.name} — NO DATA (offline or scraper not running)</div>`;
+            }
+
+            // Build the card HTML
+            cardsHTML += `
+            <div class="building-card ${def.primary ? 'primary' : ''}">
+                <div class="building-header">
+                    <span class="building-name">
+                        ${def.label}
+                        ${def.primary ? '<span class="primary-tag">Primary</span>' : ''}
+                    </span>
+                    <span class="status-badge ${online ? 'status-online' : 'status-offline'}">
+                        ${online ? 'ONLINE' : 'OFFLINE'}
+                    </span>
+                </div>
+                <div class="readings-grid">
+                    <div class="reading-box">
+                        <div class="reading-label">pH Sensor 1</div>
+                        <div class="reading-value ${phStatus(ph1)}">${fmt(ph1)}</div>
+                    </div>
+                    <div class="reading-box">
+                        <div class="reading-label">pH Sensor 2</div>
+                        <div class="reading-value ${phStatus(ph2)}">${fmt(ph2)}</div>
+                    </div>
+                    <div class="reading-box">
+                        <div class="reading-label">EC (mS/cm)</div>
+                        <div class="reading-value ${ecStatus(ec)}">${fmt(ec)}</div>
+                    </div>
+                    <div class="reading-box">
+                        <div class="reading-label">Flow (GPM)</div>
+                        <div class="reading-value ${flowStatus(flow)}">${fmt(flow)}</div>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        container.innerHTML = cardsHTML;
+        alertsContainer.innerHTML = alertsHTML;
+    }
+
+    // ==================================================================
+    // INITIALIZE CHARTS
+    // Creates the Chart.js instances once. Data gets swapped in later.
+    // ==================================================================
+    function initCharts() {
+        // Shared chart options — dark theme, clean look
+        const commonOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: { duration: 300 },
+            plugins: {
+                legend: {
+                    labels: { color: "#999", font: { family: "'JetBrains Mono', monospace", size: 11 } }
+                }
+            },
+            scales: {
+                x: {
+                    ticks: { color: "#555", font: { size: 10 }, maxTicksLimit: 8 },
+                    grid: { color: "#1a1a1a" },
+                },
+                y: {
+                    ticks: { color: "#777", font: { size: 11 } },
+                    grid: { color: "#1a1a1a" },
+                },
+            },
+        };
+
+        // pH chart
+        phChart = new Chart(document.getElementById("chart-ph"), {
+            type: "line",
+            data: { labels: [], datasets: [] },
+            options: {
+                ...commonOptions,
+                scales: {
+                    ...commonOptions.scales,
+                    y: { ...commonOptions.scales.y, min: 4.5, max: 8.0 },
+                },
+            },
+        });
+
+        // EC chart
+        ecChart = new Chart(document.getElementById("chart-ec"), {
+            type: "line",
+            data: { labels: [], datasets: [] },
+            options: commonOptions,
+        });
+    }
+
+    // ==================================================================
+    // UPDATE CHARTS WITH HISTORY DATA
+    // Called every refresh with data from /api/history
+    // ==================================================================
+    function updateCharts(historyData) {
+        // Organize data by building
+        const byBuilding = { AB: [], EF: [], GH: [] };
+        for (const point of historyData) {
+            if (byBuilding[point.building]) {
+                byBuilding[point.building].push(point);
+            }
+        }
+
+        // Build time labels from the building with the most data points
+        let longestBuilding = "AB";
+        for (const b of ["EF", "GH"]) {
+            if (byBuilding[b].length > byBuilding[longestBuilding].length) {
+                longestBuilding = b;
+            }
+        }
+        const labels = byBuilding[longestBuilding].map(p => {
+            // Show just HH:MM for compact labels
+            const d = new Date(p.timestamp);
+            return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        });
+
+        // -- pH chart: 2 datasets per building (pH1 + pH2), so 6 lines total
+        // For clarity we'll do pH1 solid, pH2 dashed
+        const phDatasets = [];
+        for (const bName of ["AB", "EF", "GH"]) {
+            const c = CHART_COLORS[bName];
+            phDatasets.push({
+                label: `${bName} pH1`,
+                data: byBuilding[bName].map(p => p.ph1),
+                borderColor: c.line,
+                backgroundColor: c.fill,
+                borderWidth: 1.5,
+                pointRadius: 0,
+                tension: 0.3,
+                fill: false,
+            });
+            phDatasets.push({
+                label: `${bName} pH2`,
+                data: byBuilding[bName].map(p => p.ph2),
+                borderColor: c.line,
+                backgroundColor: "transparent",
+                borderWidth: 1,
+                borderDash: [4, 3],
+                pointRadius: 0,
+                tension: 0.3,
+                fill: false,
+            });
+        }
+        phChart.data.labels = labels;
+        phChart.data.datasets = phDatasets;
+        phChart.update("none");  // "none" = no animation for snappy updates
+
+        // -- EC chart: 1 dataset per building
+        const ecDatasets = [];
+        for (const bName of ["AB", "EF", "GH"]) {
+            const c = CHART_COLORS[bName];
+            ecDatasets.push({
+                label: `${bName} EC`,
+                data: byBuilding[bName].map(p => p.ec),
+                borderColor: c.line,
+                backgroundColor: c.fill,
+                borderWidth: 1.5,
+                pointRadius: 0,
+                tension: 0.3,
+                fill: true,
+            });
+        }
+        ecChart.data.labels = labels;
+        ecChart.data.datasets = ecDatasets;
+        ecChart.update("none");
+    }
+
+    // ==================================================================
+    // MAIN REFRESH LOOP
+    // Fetches latest + history data every 5 seconds.
+    // ==================================================================
+    async function refresh() {
+        try {
+            // Fetch live readings
+            const latestRes = await fetch("/api/latest");
+            const latestData = await latestRes.json();
+            renderBuildings(latestData);
+
+            // Fetch chart history
+            const historyRes = await fetch("/api/history");
+            const historyData = await historyRes.json();
+            updateCharts(historyData);
+
+            // Update the "last updated" timestamp
+            document.getElementById("last-updated").textContent =
+                "Updated: " + new Date().toLocaleTimeString();
+
+        } catch (err) {
+            document.getElementById("last-updated").textContent =
+                "⚠ Failed to fetch data — is the server running?";
+            console.error("Refresh error:", err);
+        }
+    }
+
+    // ==================================================================
+    // STARTUP
+    // Initialize charts, do first data fetch, then start the timer.
+    // ==================================================================
+    initCharts();
+    refresh();
+    setInterval(refresh, REFRESH_INTERVAL);
+    </script>
+</body>
+</html>
